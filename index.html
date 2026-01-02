@@ -62,6 +62,18 @@
         .animate-bounce {
             animation: bounce 1s infinite;
         }
+        
+        /* Custom Scrollbar for Chat */
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+        }
     </style>
 </head>
 
@@ -362,14 +374,505 @@
                 </div>
             </footer>
 
-            <div class="fixed bottom-6 right-6 z-50">
-                <button class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 text-primary-foreground hover:bg-primary/90 px-4 py-2 w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300">
+                        <div class="fixed bottom-6 right-6 z-50 font-sans">
+                <!-- AidiosBot Widget -->
+                <div id="aidiosbot-window" class="hidden flex-col w-[360px] h-[520px] bg-slate-900/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 mb-4 transform origin-bottom-right">
+                    <!-- Header -->
+                    <div class="bg-gradient-to-r from-blue-600 to-purple-600 p-4 flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <div id="aidiosbot-status-dot" class="w-2 h-2 bg-green-400 rounded-full"></div>
+                            <h3 class="text-white font-bold tracking-wide">AidiosBot</h3>
+                            <span id="aidiosbot-status-text" class="text-xs text-white/80"></span>
+                        </div>
+                        <button type="button" onclick="AidiosBot.toggle()" class="text-white/80 hover:text-white hover:bg-white/10 rounded-full p-1 transition-colors" aria-label="Close AidiosBot">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 6 6 18"></path>
+                                <path d="m6 6 12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Messages -->
+                    <div id="aidiosbot-messages" class="flex-1 p-4 overflow-y-auto space-y-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"></div>
+
+                    <!-- Quick actions -->
+                    <div class="px-4 pb-3">
+                        <div id="aidiosbot-quick-actions" class="hidden flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <!-- Input -->
+                    <div class="p-4 border-t border-white/10 bg-slate-900/50">
+                        <div class="flex gap-2">
+                            <input id="aidiosbot-input" type="text" autocomplete="off" placeholder="Type your message…" class="flex-1 px-3 py-2 text-sm rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500/60" />
+                            <button id="aidiosbot-send" type="button" class="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg">
+                                Send
+                            </button>
+                        </div>
+                        <p id="aidiosbot-hint" class="mt-2 text-xs text-white/60"></p>
+                    </div>
+                </div>
+
+                <!-- Floating toggle button -->
+                <button onclick="AidiosBot.toggle()" id="aidiosbot-toggle-btn" class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60 text-primary-foreground hover:bg-primary/90 w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300" aria-label="Open AidiosBot">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-circle w-6 h-6 text-white">
                         <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path>
                     </svg>
                 </button>
             </div>
-        </div>
+
+            <script>
+                /**
+                 * AidiosBot: lightweight on-page virtual agent with lead capture + service Q&A
+                 * - Collects: name, email, phone
+                 * - Asks: whether visitor wants to be contacted
+                 * - Shows as "online" only during configured hours (Europe/London)
+                 * - Answers based on the service summary on this site
+                 */
+                const AidiosBot = (() => {
+                    // ======= CONFIG (edit these safely) =======
+                    const CONFIG = {
+                        timeZone: "Europe/London",
+                        hoursOfOperation: {
+                            // JS weekday numbers: 0=Sun, 1=Mon, ... 6=Sat
+                            openDays: [1, 2, 3, 4, 5], // Mon–Fri
+                            openTime: "09:00",
+                            closeTime: "17:00"
+                        },
+                        company: {
+                            name: "Aidios Bridgeway",
+                            email: "INFO@AIDIOSBRIDGEWAY.CO.UK",
+                            phone: "+447986902978",
+                            location: "United Kingdom"
+                        },
+                        // Optional: send captured leads to your backend/CRM endpoint
+                        // Example payload: { name, email, phone, consentToContact, inquiry, timestampISO, userAgent }
+                        leadWebhookUrl: "" // e.g. "https://your-domain.com/api/leads"
+                    };
+
+                    // ======= DOM =======
+                    const elWindow = document.getElementById("aidiosbot-window");
+                    const elMessages = document.getElementById("aidiosbot-messages");
+                    const elInput = document.getElementById("aidiosbot-input");
+                    const elSend = document.getElementById("aidiosbot-send");
+                    const elHint = document.getElementById("aidiosbot-hint");
+                    const elStatusDot = document.getElementById("aidiosbot-status-dot");
+                    const elStatusText = document.getElementById("aidiosbot-status-text");
+                    const elQuickActions = document.getElementById("aidiosbot-quick-actions");
+
+                    // ======= STATE =======
+                    const STORAGE_KEY = "aidiosbot_lead_v1";
+                    const state = {
+                        isOpen: false,
+                        withinHours: false,
+                        step: "name", // name -> email -> phone -> consent -> inquiry -> ready
+                        lead: {
+                            name: "",
+                            email: "",
+                            phone: "",
+                            consentToContact: null,
+                            inquiry: ""
+                        }
+                    };
+
+                    // ======= KNOWLEDGE BASE (derived from your Services section) =======
+                    const KB = {
+                        overview:
+                            "We provide four core service areas: Consulting, Digital Services, Procurement, and Resourcing. Tell me which one you need, or ask a question in plain English.",
+                        consulting:
+                            "Consulting: Strategic business consulting to drive growth and operational excellence. Typical focus areas include strategic planning, process optimisation, change management, and performance analytics.",
+                        digital:
+                            "Digital Services: Digital transformation support including digital strategy, technology integration, cloud solutions, and digital innovation to modernise your operations.",
+                        procurement:
+                            "Procurement: Supply chain and procurement optimisation including supplier management, cost optimisation, risk assessment, and contract negotiation.",
+                        resourcing:
+                            "Resourcing: Talent acquisition and resource management including talent acquisition, resource planning, skills assessment, and team optimisation.",
+                        contact:
+                            `Contact: Email ${CONFIG.company.email} or call ${CONFIG.company.phone}. Location: ${CONFIG.company.location}.`,
+                    };
+
+                    // ======= TIME / AVAILABILITY =======
+                    function parseHHMM(hhmm) {
+                        const [h, m] = hhmm.split(":").map(n => parseInt(n, 10));
+                        return { h: isNaN(h) ? 0 : h, m: isNaN(m) ? 0 : m };
+                    }
+
+                    function getZonedParts(date = new Date(), timeZone = CONFIG.timeZone) {
+                        const fmt = new Intl.DateTimeFormat("en-GB", {
+                            timeZone,
+                            weekday: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: false
+                        });
+                        const parts = fmt.formatToParts(date);
+                        const out = {};
+                        for (const p of parts) {
+                            if (p.type !== "literal") out[p.type] = p.value;
+                        }
+                        const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+                        return {
+                            weekday: weekdayMap[out.weekday] ?? 0,
+                            hour: parseInt(out.hour, 10),
+                            minute: parseInt(out.minute, 10)
+                        };
+                    }
+
+                    function isWithinBusinessHours() {
+                        const now = getZonedParts();
+                        const { h: openH, m: openM } = parseHHMM(CONFIG.hoursOfOperation.openTime);
+                        const { h: closeH, m: closeM } = parseHHMM(CONFIG.hoursOfOperation.closeTime);
+
+                        if (!CONFIG.hoursOfOperation.openDays.includes(now.weekday)) return false;
+
+                        const nowMin = now.hour * 60 + now.minute;
+                        const openMin = openH * 60 + openM;
+                        const closeMin = closeH * 60 + closeM;
+
+                        // Open inclusive, close exclusive
+                        return nowMin >= openMin && nowMin < closeMin;
+                    }
+
+                    function hoursSummary() {
+                        const days = CONFIG.hoursOfOperation.openDays
+                            .map(d => ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d])
+                            .join(", ");
+                        return `${days} ${CONFIG.hoursOfOperation.openTime}–${CONFIG.hoursOfOperation.closeTime} (${CONFIG.timeZone})`;
+                    }
+
+                    function updateAvailabilityUI() {
+                        state.withinHours = isWithinBusinessHours();
+                        if (state.withinHours) {
+                            elStatusDot.classList.add("bg-green-400");
+                            elStatusDot.classList.remove("bg-amber-300");
+                            elStatusText.textContent = "Online";
+                            elHint.textContent = "Ask about our services, or request a callback.";
+                        } else {
+                            elStatusDot.classList.add("bg-amber-300");
+                            elStatusDot.classList.remove("bg-green-400");
+                            elStatusText.textContent = "Offline";
+                            elHint.textContent = `We are offline right now. Hours: ${hoursSummary()}. You can still leave your details.`;
+                        }
+                        setInputEnabled(true); // still allow lead capture outside hours
+                    }
+
+                    // ======= STORAGE =======
+                    function loadLead() {
+                        try {
+                            const raw = localStorage.getItem(STORAGE_KEY);
+                            if (!raw) return;
+                            const parsed = JSON.parse(raw);
+                            if (parsed && typeof parsed === "object") {
+                                state.lead = { ...state.lead, ...parsed };
+                                if (state.lead.name && state.lead.email && state.lead.phone && state.lead.consentToContact !== null) {
+                                    state.step = "ready";
+                                }
+                            }
+                        } catch (_) { /* ignore */ }
+                    }
+
+                    function saveLead() {
+                        try {
+                            localStorage.setItem(STORAGE_KEY, JSON.stringify(state.lead));
+                        } catch (_) { /* ignore */ }
+                    }
+
+                    async function submitLead() {
+                        // Only submit if an endpoint is configured
+                        if (!CONFIG.leadWebhookUrl) return;
+
+                        const payload = {
+                            ...state.lead,
+                            timestampISO: new Date().toISOString(),
+                            userAgent: navigator.userAgent
+                        };
+
+                        try {
+                            await fetch(CONFIG.leadWebhookUrl, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(payload)
+                            });
+                        } catch (_) {
+                            // Silent failure; visitor experience should not break
+                        }
+                    }
+
+                    // ======= UI HELPERS =======
+                    function toggle() {
+                        state.isOpen = !state.isOpen;
+                        elWindow.classList.toggle("hidden");
+                        elWindow.classList.toggle("flex");
+                        if (state.isOpen) {
+                            setTimeout(() => elInput?.focus(), 0);
+                            if (!elMessages.dataset.booted) bootConversation();
+                        }
+                    }
+
+                    function setInputEnabled(enabled) {
+                        elInput.disabled = !enabled;
+                        elSend.disabled = !enabled;
+                        if (!enabled) {
+                            elInput.classList.add("opacity-60");
+                        } else {
+                            elInput.classList.remove("opacity-60");
+                        }
+                    }
+
+                    function scrollToBottom() {
+                        elMessages.scrollTop = elMessages.scrollHeight;
+                    }
+
+                    function escapeHTML(str) {
+                        return String(str)
+                            .replaceAll("&", "&amp;")
+                            .replaceAll("<", "&lt;")
+                            .replaceAll(">", "&gt;")
+                            .replaceAll('"', "&quot;")
+                            .replaceAll("'", "&#039;");
+                    }
+
+                    function addBotMessage(text) {
+                        const msgDiv = document.createElement("div");
+                        msgDiv.className = "flex items-start gap-2.5 mb-4 animate-fade-in";
+                        msgDiv.innerHTML = `
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs text-white font-bold">AB</div>
+                            <div class="flex flex-col gap-1 w-full max-w-[320px]">
+                                <div class="flex flex-col leading-1.5 p-4 bg-white/10 rounded-e-xl rounded-es-xl border border-white/10">
+                                    <p class="text-sm font-normal text-white">${escapeHTML(text)}</p>
+                                </div>
+                            </div>
+                        `;
+                        elMessages.appendChild(msgDiv);
+                        scrollToBottom();
+                    }
+
+                    function addUserMessage(text) {
+                        const msgDiv = document.createElement("div");
+                        msgDiv.className = "flex justify-end mb-4 animate-fade-in";
+                        msgDiv.innerHTML = `
+                            <div class="flex flex-col leading-1.5 p-3 bg-blue-600 rounded-s-xl rounded-ee-xl text-white max-w-[80%]">
+                                <p class="text-sm font-normal">${escapeHTML(text)}</p>
+                            </div>
+                        `;
+                        elMessages.appendChild(msgDiv);
+                        scrollToBottom();
+                    }
+
+                    function setQuickActionsVisible(visible) {
+                        elQuickActions.classList.toggle("hidden", !visible);
+                    }
+
+                    function renderQuickActions() {
+                        elQuickActions.innerHTML = "";
+                        const actions = [
+                            { label: "Consulting", key: "consulting" },
+                            { label: "Digital Services", key: "digital" },
+                            { label: "Procurement", key: "procurement" },
+                            { label: "Resourcing", key: "resourcing" },
+                            { label: "Hours", key: "hours" },
+                            { label: "Contact", key: "contact" }
+                        ];
+
+                        for (const a of actions) {
+                            const btn = document.createElement("button");
+                            btn.type = "button";
+                            btn.className =
+                                "px-3 py-2 text-xs font-medium text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 transition-colors";
+                            btn.textContent = a.label;
+                            btn.addEventListener("click", () => {
+                                if (a.key === "hours") {
+                                    addUserMessage("Hours");
+                                    addBotMessage(`Our hours of operation are ${hoursSummary()}.`);
+                                    return;
+                                }
+                                addUserMessage(a.label);
+                                addBotMessage(KB[a.key] || KB.overview);
+                            });
+                            elQuickActions.appendChild(btn);
+                        }
+                    }
+
+                    // ======= VALIDATION =======
+                    function isValidEmail(email) {
+                        // intentionally simple (client-side)
+                        return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email.trim());
+                    }
+
+                    function normalisePhone(phone) {
+                        return phone.replace(/[^\d+]/g, "");
+                    }
+
+                    function isValidPhone(phone) {
+                        const p = normalisePhone(phone);
+                        const digits = p.replace(/[^\d]/g, "");
+                        return digits.length >= 7 && digits.length <= 15;
+                    }
+
+                    function parseYesNo(text) {
+                        const t = text.trim().toLowerCase();
+                        if (["yes","y","yeah","yep","sure","ok","okay"].includes(t)) return true;
+                        if (["no","n","nope","not now"].includes(t)) return false;
+                        return null;
+                    }
+
+                    // ======= CONVERSATION FLOW =======
+                    function bootConversation() {
+                        elMessages.dataset.booted = "1";
+                        updateAvailabilityUI();
+                        renderQuickActions();
+
+                        addBotMessage(state.withinHours
+                            ? "Hello — I’m AidiosBot. Before we continue, please share your name."
+                            : `Hello — I’m AidiosBot. We are currently offline. Hours: ${hoursSummary()}. I can take your details and a team member will follow up. Please share your name.`);
+
+                        // If we already have lead info, skip to ready
+                        if (state.step === "ready") {
+                            setQuickActionsVisible(true);
+                            addBotMessage("Welcome back. How can I help you today?");
+                        } else {
+                            setQuickActionsVisible(false);
+                        }
+                    }
+
+                    function nextPrompt() {
+                        switch (state.step) {
+                            case "name":
+                                addBotMessage("What is your full name?");
+                                break;
+                            case "email":
+                                addBotMessage("Thanks. What is your email address?");
+                                break;
+                            case "phone":
+                                addBotMessage("And your phone number (include country code, e.g. +44…)?");
+                                break;
+                            case "consent":
+                                addBotMessage("Would you like a team member to contact you? Reply YES or NO.");
+                                break;
+                            case "inquiry":
+                                addBotMessage("Briefly, what do you need help with?");
+                                break;
+                            case "ready":
+                                setQuickActionsVisible(true);
+                                addBotMessage(state.withinHours
+                                    ? "Thank you. You can choose a quick option below or ask a question about our services."
+                                    : "Thank you. We will respond during business hours. For urgent matters, please use the contact details on this page.");
+                                break;
+                        }
+                    }
+
+                    function answerQuestion(textRaw) {
+                        const text = textRaw.trim().toLowerCase();
+
+                        // High-signal routing
+                        if (text.includes("consult")) return KB.consulting;
+                        if (text.includes("digital") || text.includes("cloud") || text.includes("software") || text.includes("technology")) return KB.digital;
+                        if (text.includes("procure") || text.includes("supplier") || text.includes("contract") || text.includes("supply")) return KB.procurement;
+                        if (text.includes("resource") || text.includes("recruit") || text.includes("talent") || text.includes("staff")) return KB.resourcing;
+
+                        if (text.includes("contact") || text.includes("email") || text.includes("phone") || text.includes("call")) return KB.contact;
+                        if (text.includes("hour") || text.includes("open") || text.includes("close") || text.includes("time")) return `Our hours of operation are ${hoursSummary()}.`;
+
+                        // General fallback: overview + steer
+                        return KB.overview;
+                    }
+
+                    async function handleSend() {
+                        const text = (elInput.value || "").trim();
+                        if (!text) return;
+                        elInput.value = "";
+
+                        addUserMessage(text);
+
+                        // Lead-capture gating
+                        if (state.step === "name") {
+                            if (text.length < 2) {
+                                addBotMessage("Please provide your name (at least 2 characters).");
+                                return;
+                            }
+                            state.lead.name = text;
+                            state.step = "email";
+                            saveLead();
+                            nextPrompt();
+                            return;
+                        }
+
+                        if (state.step === "email") {
+                            if (!isValidEmail(text)) {
+                                addBotMessage("That email address does not look valid. Please re-enter your email.");
+                                return;
+                            }
+                            state.lead.email = text;
+                            state.step = "phone";
+                            saveLead();
+                            nextPrompt();
+                            return;
+                        }
+
+                        if (state.step === "phone") {
+                            if (!isValidPhone(text)) {
+                                addBotMessage("That phone number does not look valid. Please include digits and (optionally) a leading + country code.");
+                                return;
+                            }
+                            state.lead.phone = normalisePhone(text);
+                            state.step = "consent";
+                            saveLead();
+                            nextPrompt();
+                            return;
+                        }
+
+                        if (state.step === "consent") {
+                            const yn = parseYesNo(text);
+                            if (yn === null) {
+                                addBotMessage("Please reply YES or NO.");
+                                return;
+                            }
+                            state.lead.consentToContact = yn;
+                            state.step = "inquiry";
+                            saveLead();
+                            nextPrompt();
+                            return;
+                        }
+
+                        if (state.step === "inquiry") {
+                            state.lead.inquiry = text;
+                            state.step = "ready";
+                            saveLead();
+
+                            // Submit asynchronously if configured
+                            if (state.lead.consentToContact) await submitLead();
+
+                            nextPrompt();
+                            return;
+                        }
+
+                        // After lead capture
+                        if (!state.withinHours) {
+                            addBotMessage(`We are currently offline. Hours: ${hoursSummary()}. For immediate assistance, email ${CONFIG.company.email} or call ${CONFIG.company.phone}.`);
+                            return;
+                        }
+
+                        addBotMessage(answerQuestion(text));
+                    }
+
+                    function init() {
+                        loadLead();
+                        updateAvailabilityUI();
+
+                        elSend.addEventListener("click", handleSend);
+                        elInput.addEventListener("keydown", (e) => {
+                            if (e.key === "Enter") handleSend();
+                        });
+
+                        // Keep status accurate if the tab stays open
+                        setInterval(updateAvailabilityUI, 60 * 1000);
+                    }
+
+                    return { init, toggle };
+                })();
+
+                document.addEventListener("DOMContentLoaded", AidiosBot.init);
+            </script>
+            </div>
     </div>
 </body>
 </html>
